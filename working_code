@@ -1,0 +1,61 @@
+## WS Project (thanks to stm vignette for pointers throughout this
+  # thought experiment!)##
+
+# Marshall A. Taylor #
+
+# Required packages.
+library(NLP)
+library(tm)
+library(RColorBrewer)
+library(SnowballC)
+library(ggplot2)
+library(graph)
+library(grid)
+library(Rgraphviz)
+library(pheatmap)
+library(RWeka)
+library(topicmodels)
+library(corrplot)
+library(fastcluster)
+library(ca)
+library(servr)
+library(LDAvis)
+library(stm)
+
+# Reading in and processing data.
+data <- read.csv("WS_Data_Input.csv")
+data$Lyrics <- gsub("[^[:alnum:]///' ]", " ", data$Lyrics)
+processed <- textProcessor(documents=data$Lyrics, metadata=data, lowercase=T, 
+                           removestopwords=T, removenumbers=T, removepunctuation=T, 
+                           stem=T, sparselevel=1, language="en", verbose=F, 
+                           onlycharacter=F, customstopwords=NULL)
+out <- prepDocuments(processed$documents, processed$vocab, 
+                     processed$meta)
+docs <- out$documents
+vocab <- out$vocab
+meta <- out$meta
+
+# Selecting a model.
+pot_models <- selectModel(docs, vocab, K=10, content =~ Band, 
+                          init.type="LDA", data=meta, runs=20,
+                          seed=16789)
+plotModels(pot_models)
+best_fit <- pot_models$runout[[1]]
+
+# Playing around...
+labelTopics(best_fit)
+plot.STM(best_fit, type="perspectives", covarlevels=c(4,5), topics=8)
+plot.STM(best_fit, type="summary")
+plot.STM(best_fit, type="hist")
+best_corr <- topicCorr(best_fit)
+plot.topicCorr(best_corr)
+best_theta <- thetaPosterior(best_fit, nsims=1)
+write.csv(best_theta, file="best_theta.csv")
+test <- estimateEffect(1:10 ~ Band, best_fit, meta=meta, uncertainty="Global")
+plot.estimateEffect(test, covariate="Band", topics=c(2,5,10), model=best_fit,
+                   method="difference", cov.value1="Band1",
+                   cov.value2="Band2", 
+                   xlab="More Genre1 . . . More Genre2",
+                   main="Genre Differences")
+plot.estimateEffect(test, covariate="Band", topics=c(5), model=best_fit,
+                    method="pointestimate")
