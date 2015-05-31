@@ -59,3 +59,42 @@ plot.estimateEffect(test, covariate="Band", topics=c(2,5,10), model=best_fit,
                    main="Genre Differences")
 plot.estimateEffect(test, covariate="Band", topics=c(5), model=best_fit,
                     method="pointestimate")
+
+# Re-estimating the models to include prevalence.
+data2 <- data
+data2$Year[data2$Year=="."] <- NA
+Year <- as.numeric(as.character(data2$Year))
+mean(Year[1:44], na.rm=T)
+data2[23, "Year"] <- 1985
+data2[40, "Year"] <- 1985
+mean(Year[96:112], na.rm=T)
+data2[102, "Year"] <- 2004
+data2$Year <- as.numeric(as.character(data2$Year))
+processed2 <- textProcessor(documents=data2$Lyrics, metadata=data2, lowercase=T, 
+                           removestopwords=T, removenumbers=T, removepunctuation=T, 
+                           stem=T, sparselevel=1, language="en", verbose=F, 
+                           onlycharacter=F, customstopwords=NULL)
+out2 <- prepDocuments(processed2$documents, processed2$vocab, 
+                     processed2$meta)
+docs2 <- out2$documents
+vocab2 <- out2$vocab
+meta2 <- out2$meta
+# Selecting a model.
+pot_models2 <- selectModel(docs2, vocab2, K=10, prevalence =~ Band + s(Year), content =~ Band, 
+                          init.type="LDA", data=meta2, runs=20,
+                          seed=78902)
+plotModels(pot_models2)
+best_fit2 <- pot_models2$runout[[3]]
+test2 <- estimateEffect(1:10 ~ Band+s(Year), best_fit2, meta=meta2, 
+                        uncertainty="Global")
+plot.estimateEffect(test2, "Year", method="continuous", topics=c(1,2,3))
+best_corr2 <- topicCorr(best_fit2)
+plot.topicCorr(best_corr2)
+plot.STM(best_fit2, type="perspectives", covarlevels=c(4,5), topics=8)
+
+# Some visualizations.
+work <- stm(docs2, vocab2, K=10, prevalence =~ Band + s(Year), 
+            init.type="LDA", data=meta2,
+            seed=78902)
+stmBrowser(work, data=meta2, c("Band", "Year"), id="Doc_ID", labeltype="prob", 
+           text="Lyrics")
