@@ -21,6 +21,7 @@ library(ca)
 library(servr)
 library(LDAvis)
 library(stm)
+library(stmBrowser) #You will need devtools to get this. I couldn't find it on CRAN.
 
 # Reading in and processing data.
 data <- read.csv("WS_Data_Input.csv")
