@@ -60,7 +60,7 @@ labelTopics(paper_model2)
 corr_paper2 <- topicCorr(paper_model2)
 plot.topicCorr(corr_paper2)
 stmBrowser(paper_model, data=meta2, c("Band", "Genre"), id="Doc_ID", labeltype="prob", 
-           text="Lyrics")
+           text="Lyrics") #I don't think you can use stmBrowser with a content covariate in the formula for the model.
 plot.STM(paper_model, type="summary")
 plot.STM(paper_model, type="hist")
 plot.STM(paper_model2, type="summary")
