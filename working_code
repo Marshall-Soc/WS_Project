@@ -1,5 +1,4 @@
-## WS Project (thanks to stm vignette for pointers throughout this
-  # thought experiment!)##
+## WS Project ##
 
 # Marshall A. Taylor #
 
@@ -13,55 +12,12 @@ library(graph)
 library(grid)
 library(Rgraphviz)
 library(pheatmap)
-library(RWeka)
-library(topicmodels)
-library(corrplot)
-library(fastcluster)
-library(ca)
-library(servr)
-library(LDAvis)
 library(stm)
-library(stmBrowser) #You will need devtools to get this. I couldn't find it on CRAN.
+library(stmBrowser)
 
 # Reading in and processing data.
 data <- read.csv("WS_Data_Input.csv")
 data$Lyrics <- gsub("[^[:alnum:]///' ]", " ", data$Lyrics)
-processed <- textProcessor(documents=data$Lyrics, metadata=data, lowercase=T, 
-                           removestopwords=T, removenumbers=T, removepunctuation=T, 
-                           stem=T, sparselevel=1, language="en", verbose=F, 
-                           onlycharacter=F, customstopwords=NULL)
-out <- prepDocuments(processed$documents, processed$vocab, 
-                     processed$meta)
-docs <- out$documents
-vocab <- out$vocab
-meta <- out$meta
-
-# Selecting a model.
-pot_models <- selectModel(docs, vocab, K=10, content =~ Band, 
-                          init.type="LDA", data=meta, runs=20,
-                          seed=16789)
-plotModels(pot_models)
-best_fit <- pot_models$runout[[1]]
-
-# Playing around...
-labelTopics(best_fit)
-plot.STM(best_fit, type="perspectives", covarlevels=c(4,5), topics=8)
-plot.STM(best_fit, type="summary")
-plot.STM(best_fit, type="hist")
-best_corr <- topicCorr(best_fit)
-plot.topicCorr(best_corr)
-best_theta <- thetaPosterior(best_fit, nsims=1)
-write.csv(best_theta, file="best_theta.csv")
-test <- estimateEffect(1:10 ~ Band, best_fit, meta=meta, uncertainty="Global")
-plot.estimateEffect(test, covariate="Band", topics=c(2,5,10), model=best_fit,
-                   method="difference", cov.value1="Band1",
-                   cov.value2="Band2", 
-                   xlab="More Genre1 . . . More Genre2",
-                   main="Genre Differences")
-plot.estimateEffect(test, covariate="Band", topics=c(5), model=best_fit,
-                    method="pointestimate")
-
-# Re-estimating the models to include prevalence.
 data2 <- data
 data2$Year[data2$Year=="."] <- NA
 Year <- as.numeric(as.character(data2$Year))
@@ -80,22 +36,41 @@ out2 <- prepDocuments(processed2$documents, processed2$vocab,
 docs2 <- out2$documents
 vocab2 <- out2$vocab
 meta2 <- out2$meta
-# Selecting a model.
-pot_models2 <- selectModel(docs2, vocab2, K=10, prevalence =~ Band + s(Year), content =~ Band, 
+
+# Selecting a model (not used here).
+pot_models2 <- selectModel(docs2, vocab2, K=10, prevalence =~ Band+Genre, content =~ Band, 
                           init.type="LDA", data=meta2, runs=20,
                           seed=78902)
 plotModels(pot_models2)
-best_fit2 <- pot_models2$runout[[3]]
-test2 <- estimateEffect(1:10 ~ Band+s(Year), best_fit2, meta=meta2, 
-                        uncertainty="Global")
-plot.estimateEffect(test2, "Year", method="continuous", topics=c(1,2,3))
-best_corr2 <- topicCorr(best_fit2)
-plot.topicCorr(best_corr2)
-plot.STM(best_fit2, type="perspectives", covarlevels=c(4,5), topics=8)
+best_fit2 <- pot_models2$runout[[Best solution here]]
 
-# Some visualizations.
-work <- stm(docs2, vocab2, K=10, prevalence =~ Band + s(Year), 
-            init.type="LDA", data=meta2,
-            seed=78902)
-stmBrowser(work, data=meta2, c("Band", "Year"), id="Doc_ID", labeltype="prob", 
+# Estimating models with visualizations.
+paper_model <- stm(docs2, vocab2, K=10, prevalence =~ Band+Genre, 
+                           init.type="LDA", data=meta2,
+                           seed=78902)
+paper_model2 <- stm(docs2, vocab2, K=10, prevalence =~ Band+Genre, content =~ Band, 
+                   init.type="LDA", data=meta2,
+                   seed=78902)
+topicQuality(paper_model, docs2, labels=1:ncol(paper_model$theta))
+topicQuality(paper_model2, docs2, labels=1:ncol(paper_model$theta))
+labelTopics(paper_model)
+corr_paper <- topicCorr(paper_model)
+plot.topicCorr(corr_paper)
+labelTopics(paper_model2)
+corr_paper2 <- topicCorr(paper_model2)
+plot.topicCorr(corr_paper2)
+stmBrowser(paper_model, data=meta2, c("Band", "Genre"), id="Doc_ID", labeltype="prob", 
            text="Lyrics")
+plot.STM(paper_model, type="summary")
+plot.STM(paper_model, type="hist")
+plot.STM(paper_model2, type="summary")
+plot.STM(paper_model2, type="hist")
+paper_est1 <- estimateEffect(1:10 ~ Band, paper_model2, meta=meta2,
+                            uncertainty="Global")
+paper_est2 <- estimateEffect(1:10 ~ Genre, paper_model2, meta=meta2,
+                             uncertainty="Global")
+plot.estimateEffect(paper_est2, covariate="Genre", topics=c(5), model=paper_model2,
+                    method="pointestimate")
+plot.estimateEffect(paper_est1, covariate="Band", topics=c(5,7), model=paper_model2,
+                    method="difference", cov.value1="Der Sturmer", cov.value2="Skrewdriver")
+plot.STM(paper_model2, type="perspectives", covarlevels=c(4,5), topics=8)
