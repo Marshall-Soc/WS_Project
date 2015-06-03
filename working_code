@@ -13,7 +13,9 @@ library(grid)
 library(Rgraphviz)
 library(pheatmap)
 library(stm)
+library(huge)
 library(stmBrowser)
+library(ca)
 
 # Reading in and processing data.
 data <- read.csv("WS_Data_Input.csv")
@@ -42,7 +44,7 @@ pot_models2 <- selectModel(docs2, vocab2, K=10, prevalence =~ Band+Genre, conten
                           init.type="LDA", data=meta2, runs=20,
                           seed=78902)
 plotModels(pot_models2)
-best_fit2 <- pot_models2$runout[[Best solution here]]
+best_fit2 <- pot_models2$runout[[?]]
 
 # Estimating models with visualizations.
 paper_model <- stm(docs2, vocab2, K=10, prevalence =~ Band+Genre, 
@@ -60,7 +62,7 @@ labelTopics(paper_model2)
 corr_paper2 <- topicCorr(paper_model2)
 plot.topicCorr(corr_paper2)
 stmBrowser(paper_model, data=meta2, c("Band", "Genre"), id="Doc_ID", labeltype="prob", 
-           text="Lyrics") #I don't think you can use stmBrowser with a content covariate in the formula for the model.
+           text="Lyrics")
 plot.STM(paper_model, type="summary")
 plot.STM(paper_model, type="hist")
 plot.STM(paper_model2, type="summary")
@@ -72,5 +74,24 @@ paper_est2 <- estimateEffect(1:10 ~ Genre, paper_model2, meta=meta2,
 plot.estimateEffect(paper_est2, covariate="Genre", topics=c(5), model=paper_model2,
                     method="pointestimate")
 plot.estimateEffect(paper_est1, covariate="Band", topics=c(5,7), model=paper_model2,
-                    method="difference", cov.value1="Der Sturmer", cov.value2="Skrewdriver")
-plot.STM(paper_model2, type="perspectives", covarlevels=c(4,5), topics=8)
+                    method="difference", cov.value1="Band1", cov.value2="Band2")
+plot.STM(paper_model2, type="perspectives", covarlevels=c(1,5), topics=9)
+theta <- as.matrix(paper_model2$theta)
+test2 <- as.matrix(paper_model2$beta)
+test2 <- as.matrix(vocab2)
+pheatmap(theta, show_rownames=T, show_colnames=T, digits=3, display_numbers=F, 
+         treeheight_row=90, treeheight_col=0, cluster_rows=T, cluster_cols=F, 
+         clustering_method="complete", number_format="%.3f")
+
+theta2 <- theta
+theta2 <- as.data.frame(theta2)
+rownames(theta2)[1:44] <- paste("1_", 1:44, sep = "")
+rownames(theta2)[45:95] <- paste("2_", 1:51, sep = "")
+rownames(theta2)[96:112] <- paste("3_", 1:17, sep = "")
+rownames(theta2)[113:122] <- paste("4_", 1:10, sep = "")
+rownames(theta2)[123:144] <- paste("5_", 1:22, sep = "")
+colnames(theta2) <- paste("Topic", 1:10, sep=" ")
+plot(ca(theta2), labels=c(1,1))
+thetaCA <- ca(theta2)
+print(thetaCA)
+summary(thetaCA)
