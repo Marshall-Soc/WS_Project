@@ -11,13 +11,15 @@ library(ggplot2)
 library(graph)
 library(grid)
 library(Rgraphviz)
-library(pheatmap)
 library(stm)
-library(huge)
 library(stmBrowser)
 library(ca)
+library(RWeka)
+library(fastcluster)
+library(ape)
+library(cluster)
 
-# Reading in and processing data.
+# Reading in and processing data, estimating and visualizing topic models.
 data <- read.csv("WS_Data_Input.csv")
 data$Lyrics <- gsub("[^[:alnum:]///' ]", " ", data$Lyrics)
 data2 <- data
@@ -60,7 +62,7 @@ corr_paper <- topicCorr(paper_model)
 plot.topicCorr(corr_paper)
 labelTopics(paper_model2)
 corr_paper2 <- topicCorr(paper_model2)
-plot.topicCorr(corr_paper2)
+plot.topicCorr(corr_paper2, vertex.color=c("gray"), vertex.label.color=c("black"))
 stmBrowser(paper_model, data=meta2, c("Band", "Genre"), id="Doc_ID", labeltype="prob", 
            text="Lyrics")
 plot.STM(paper_model, type="summary")
@@ -74,15 +76,50 @@ paper_est2 <- estimateEffect(1:10 ~ Genre, paper_model2, meta=meta2,
 plot.estimateEffect(paper_est2, covariate="Genre", topics=c(5), model=paper_model2,
                     method="pointestimate")
 plot.estimateEffect(paper_est1, covariate="Band", topics=c(5,7), model=paper_model2,
-                    method="difference", cov.value1="Band1", cov.value2="Band2")
+                    method="difference", cov.value1="Der Sturmer", cov.value2="Skrewdriver")
 plot.STM(paper_model2, type="perspectives", covarlevels=c(1,5), topics=9)
+
+# Clustering with theta distribution.
 theta <- as.matrix(paper_model2$theta)
 test2 <- as.matrix(paper_model2$beta)
 test2 <- as.matrix(vocab2)
 pheatmap(theta, show_rownames=T, show_colnames=T, digits=3, display_numbers=F, 
-         treeheight_row=90, treeheight_col=0, cluster_rows=T, cluster_cols=F, 
+         treeheight_row=90, treeheight_col=0, cluster_rows=F, cluster_cols=F, 
          clustering_method="complete", number_format="%.3f")
+theta3 <- theta
+theta3 <- as.data.frame(theta2)
+rownames(theta3)[1:44] <- paste("Der Sturmer_", 1:44, sep = "")
+rownames(theta3)[45:95] <- paste("Johnny Rebel_", 1:51, sep = "")
+rownames(theta3)[96:112] <- paste("Prussian Blue_", 1:17, sep = "")
+rownames(theta3)[113:122] <- paste("Saga_", 1:10, sep = "")
+rownames(theta3)[123:144] <- paste("Skrewdriver_", 1:22, sep = "")
+theta_clust <- hclust(dist(theta3), method="ward.D2")
+par(mfrow=c(2,2))
+sil <- silhouette(cutree(theta_clust, k=3), dist(theta3))
+plot(sil, cex.names=.6, main="k=3", col=c("#A52A2A", "#8B4513", "#00008B"))
+sil2 <- silhouette(cutree(theta_clust, k=5), dist(theta3))
+plot(sil2, cex.names=.6, main="k=5", col=c("#A52A2A", "#8B4513",
+                                                                 "#00008B", "#008000",
+                                                                 "#778899"))
+sil3 <- silhouette(cutree(theta_clust, k=7), dist(theta3))
+plot(sil3, cex.names=.6, main="k=7", col=mypal)
+sil4 <- silhouette(cutree(theta_clust, k=9), dist(theta3))
+plot(sil4, cex.names=.6, main="k=9", col=c("#A52A2A", "#8B4513",
+                                                                  "#00008B", "#008000",
+                                                                  "#778899", "#008080",
+                                                                  "#FF6347", "#FF00FF",
+                                                                  "#006400"))
+clus <- cutree(theta_clust, k=3)
+mypal = c("#A52A2A", "#8B4513", "#00008B", "#008000", 
+          "#778899", "#008080", "#FF6347")
+mypal2 = c("#A52A2A", "#008080","#00008B")
+par(mfrow=c(1,1))
+par(mar=c(0,0,0,0))
+plot(as.phylo(theta_clust), type="fan", tip.color=mypal2[clus], 
+     edge.color="black", cex=.5, font=2.5)
+par(mar=c(5.1,4.1,4.1,2.1))
 
+# CA.
 theta2 <- theta
 theta2 <- as.data.frame(theta2)
 rownames(theta2)[1:44] <- paste("1_", 1:44, sep = "")
@@ -95,3 +132,17 @@ plot(ca(theta2), labels=c(1,1))
 thetaCA <- ca(theta2)
 print(thetaCA)
 summary(thetaCA)
+
+# N-grams.
+options(mc.cores=1)
+TriGramTokenizer <- function(x) NGramTokenizer(x, Weka_control(min=3, max=3))
+exp <- as.data.frame(data2$Lyrics)
+corp <- Corpus(DataframeSource(exp))
+Ngrams <- TermDocumentMatrix(corp, 
+                              control = list(tokenize = TriGramTokenizer))
+Trigrams <- as.matrix(Ngrams)
+TrigramF <- sort(rowSums(as.matrix(Trigrams)), decreasing=T)
+TrigramW <- data.frame(trigrams=names(TrigramF), freq=TrigramF)
+write.csv(Trigrams, file="WS_trigrams.csv")
+write.csv(TrigramW, file="WS_trigrams_byfreq.csv")
+plot(Ngrams, terms=findFreqTerms(Ngrams, lowfreq=5) [1:15], corThreshold=0.1)
