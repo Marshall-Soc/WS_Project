@@ -16,6 +16,7 @@ library(stmBrowser)
 library(ca)
 library(RWeka)
 library(fastcluster)
+library(pheatmap)
 library(ape)
 library(cluster)
 
@@ -41,52 +42,58 @@ docs2 <- out2$documents
 vocab2 <- out2$vocab
 meta2 <- out2$meta
 
-# Selecting a model (not used here).
+# Selecting a model.
 pot_models2 <- selectModel(docs2, vocab2, K=10, prevalence =~ Band+Genre, content =~ Band, 
                           init.type="LDA", data=meta2, runs=20,
                           seed=78902)
 plotModels(pot_models2)
-best_fit2 <- pot_models2$runout[[?]]
+paper_model2 <- pot_models2$runout[[3]]
+checkBeta(paper_model2, tolerance=.01) # No problem.
 
-# Estimating models with visualizations.
+# Inspecting topic model solution.
 paper_model <- stm(docs2, vocab2, K=10, prevalence =~ Band+Genre, 
                            init.type="LDA", data=meta2,
-                           seed=78902)
+                           seed=78902) # Not run here.
 paper_model2 <- stm(docs2, vocab2, K=10, prevalence =~ Band+Genre, content =~ Band, 
                    init.type="LDA", data=meta2,
-                   seed=78902)
-topicQuality(paper_model, docs2, labels=1:ncol(paper_model$theta))
+                   seed=78902) #NR (using model above).
+topicQuality(paper_model, docs2, labels=1:ncol(paper_model$theta)) #NR.
 topicQuality(paper_model2, docs2, labels=1:ncol(paper_model$theta))
-labelTopics(paper_model)
-corr_paper <- topicCorr(paper_model)
-plot.topicCorr(corr_paper)
+labelTopics(paper_model) # NR.
+corr_paper <- topicCorr(paper_model) # NR.
+plot.topicCorr(corr_paper) #NR.
 labelTopics(paper_model2)
+sageLabels(paper_model2)
+topic_words <- as.matrix(labelTopics(paper_model2))
+write.csv(topic_words, file="topic_words.csv")
 corr_paper2 <- topicCorr(paper_model2)
 plot.topicCorr(corr_paper2, vertex.color=c("gray"), vertex.label.color=c("black"))
 stmBrowser(paper_model, data=meta2, c("Band", "Genre"), id="Doc_ID", labeltype="prob", 
-           text="Lyrics")
-plot.STM(paper_model, type="summary")
-plot.STM(paper_model, type="hist")
-plot.STM(paper_model2, type="summary")
+           text="Lyrics") # NR.
+plot.STM(paper_model, type="summary") #NR.
+plot.STM(paper_model, type="hist") #NR.
+plot.STM(paper_model2, type="summary", n=3, labeltype="prob")
 plot.STM(paper_model2, type="hist")
 paper_est1 <- estimateEffect(1:10 ~ Band, paper_model2, meta=meta2,
                             uncertainty="Global")
 paper_est2 <- estimateEffect(1:10 ~ Genre, paper_model2, meta=meta2,
                              uncertainty="Global")
-plot.estimateEffect(paper_est2, covariate="Genre", topics=c(5), model=paper_model2,
+plot.estimateEffect(paper_est1, covariate="Band", topics=c(10), model=paper_model2,
                     method="pointestimate")
 plot.estimateEffect(paper_est1, covariate="Band", topics=c(5,7), model=paper_model2,
-                    method="difference", cov.value1="Der Sturmer", cov.value2="Skrewdriver")
+                    method="difference", cov.value1="Der Sturmer", 
+                    cov.value2="Skrewdriver")
 plot.STM(paper_model2, type="perspectives", covarlevels=c(1,5), topics=9)
 
 # Clustering with theta distribution.
 theta <- as.matrix(paper_model2$theta)
-test2 <- as.matrix(paper_model2$beta)
-test2 <- as.matrix(vocab2)
+topic_prop <- as.matrix(colSums(theta)/144)
+colSums(topic_prop)
+theta2 <- theta # For CA below.
+theta2 <- as.data.frame(theta2) # For CA below.
 pheatmap(theta, show_rownames=T, show_colnames=T, digits=3, display_numbers=F, 
          treeheight_row=90, treeheight_col=0, cluster_rows=F, cluster_cols=F, 
          clustering_method="complete", number_format="%.3f")
-theta3 <- theta
 theta3 <- as.data.frame(theta2)
 rownames(theta3)[1:44] <- paste("Band1_", 1:44, sep = "")
 rownames(theta3)[45:95] <- paste("Band2_", 1:51, sep = "")
@@ -95,12 +102,10 @@ rownames(theta3)[113:122] <- paste("Band4_", 1:10, sep = "")
 rownames(theta3)[123:144] <- paste("Band5_", 1:22, sep = "")
 theta_clust <- hclust(dist(theta3), method="ward.D2")
 par(mfrow=c(2,2))
-sil <- silhouette(cutree(theta_clust, k=3), dist(theta3))
-plot(sil, cex.names=.6, main="k=3", col=c("#A52A2A", "#8B4513", "#00008B"))
-sil2 <- silhouette(cutree(theta_clust, k=5), dist(theta3))
-plot(sil2, cex.names=.6, main="k=5", col=c("#A52A2A", "#8B4513",
-                                                                 "#00008B", "#008000",
-                                                                 "#778899"))
+sil <- silhouette(cutree(theta_clust, k=2), dist(theta3))
+plot(sil, cex.names=.6, main="k=2", col=c("#A52A2A", "#8B4513"))
+sil2 <- silhouette(cutree(theta_clust, k=4), dist(theta3))
+plot(sil2, cex.names=.6, main="k=4", col=c("#A52A2A", "#8B4513", "#00008B", "#008000"))
 sil3 <- silhouette(cutree(theta_clust, k=7), dist(theta3))
 plot(sil3, cex.names=.6, main="k=7", col=mypal)
 sil4 <- silhouette(cutree(theta_clust, k=9), dist(theta3))
@@ -109,7 +114,7 @@ plot(sil4, cex.names=.6, main="k=9", col=c("#A52A2A", "#8B4513",
                                                                   "#778899", "#008080",
                                                                   "#FF6347", "#FF00FF",
                                                                   "#006400"))
-clus <- cutree(theta_clust, k=3)
+clus <- cutree(theta_clust, k=2)
 mypal = c("#A52A2A", "#8B4513", "#00008B", "#008000", 
           "#778899", "#008080", "#FF6347")
 mypal2 = c("#A52A2A", "#008080","#00008B")
@@ -120,13 +125,11 @@ plot(as.phylo(theta_clust), type="fan", tip.color=mypal2[clus],
 par(mar=c(5.1,4.1,4.1,2.1))
 
 # CA.
-theta2 <- theta
-theta2 <- as.data.frame(theta2)
-rownames(theta2)[1:44] <- paste("1_", 1:44, sep = "")
-rownames(theta2)[45:95] <- paste("2_", 1:51, sep = "")
-rownames(theta2)[96:112] <- paste("3_", 1:17, sep = "")
-rownames(theta2)[113:122] <- paste("4_", 1:10, sep = "")
-rownames(theta2)[123:144] <- paste("5_", 1:22, sep = "")
+rownames(theta2)[1:44] <- paste("AA_", 1:44, sep = "")
+rownames(theta2)[45:95] <- paste("BB_", 1:51, sep = "")
+rownames(theta2)[96:112] <- paste("CC_", 1:17, sep = "")
+rownames(theta2)[113:122] <- paste("DD_", 1:10, sep = "")
+rownames(theta2)[123:144] <- paste("EE_", 1:22, sep = "")
 colnames(theta2) <- paste("Topic", 1:10, sep=" ")
 plot(ca(theta2), labels=c(1,1))
 thetaCA <- ca(theta2)
