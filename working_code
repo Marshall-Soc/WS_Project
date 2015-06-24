@@ -16,7 +16,7 @@ library(stmBrowser)
 library(ca)
 library(RWeka)
 library(fastcluster)
-library(pheatmap)
+library(gplots)
 library(ape)
 library(cluster)
 
@@ -58,7 +58,7 @@ paper_model2 <- stm(docs2, vocab2, K=10, prevalence =~ Band+Genre, content =~ Ba
                    init.type="LDA", data=meta2,
                    seed=78902) #NR (using model above).
 topicQuality(paper_model, docs2, labels=1:ncol(paper_model$theta)) #NR.
-topicQuality(paper_model2, docs2, labels=1:ncol(paper_model$theta))
+topicQuality(paper_model2, docs2, labels=1:ncol(paper_model2$theta))
 labelTopics(paper_model) # NR.
 corr_paper <- topicCorr(paper_model) # NR.
 plot.topicCorr(corr_paper) #NR.
@@ -66,8 +66,12 @@ labelTopics(paper_model2)
 sageLabels(paper_model2)
 topic_words <- as.matrix(labelTopics(paper_model2))
 write.csv(topic_words, file="topic_words.csv")
-corr_paper2 <- topicCorr(paper_model2)
-plot.topicCorr(corr_paper2, vertex.color=c("gray"), vertex.label.color=c("black"))
+corr_paper2 <- topicCorr(paper_model2, method="simple", cutoff=.01)
+plot.topicCorr(corr_paper2, vertex.color=c("gray"), vertex.label.color=c("black"),
+               vlabels=c("Label1", "Label2", "Label3",
+                         "Label4", "Label5", "Label6", "Label7",
+                         "WLabel8", "Label9", 
+                         "Label10"))
 stmBrowser(paper_model, data=meta2, c("Band", "Genre"), id="Doc_ID", labeltype="prob", 
            text="Lyrics") # NR.
 plot.STM(paper_model, type="summary") #NR.
@@ -78,22 +82,20 @@ paper_est1 <- estimateEffect(1:10 ~ Band, paper_model2, meta=meta2,
                             uncertainty="Global")
 paper_est2 <- estimateEffect(1:10 ~ Genre, paper_model2, meta=meta2,
                              uncertainty="Global")
-plot.estimateEffect(paper_est1, covariate="Band", topics=c(10), model=paper_model2,
+plot.estimateEffect(paper_est1, covariate="Band", topics=c(4), model=paper_model2,
                     method="pointestimate")
 plot.estimateEffect(paper_est1, covariate="Band", topics=c(5,7), model=paper_model2,
-                    method="difference", cov.value1="Der Sturmer", 
-                    cov.value2="Skrewdriver")
-plot.STM(paper_model2, type="perspectives", covarlevels=c(1,5), topics=9)
+                    method="difference", cov.value1="Band1", 
+                    cov.value2="Band2")
+plot.STM(paper_model2, type="perspectives", covarlevels=c(1,5), topics=10)
 
 # Clustering with theta distribution.
 theta <- as.matrix(paper_model2$theta)
 topic_prop <- as.matrix(colSums(theta)/144)
+topic_prop
 colSums(topic_prop)
 theta2 <- theta # For CA below.
 theta2 <- as.data.frame(theta2) # For CA below.
-pheatmap(theta, show_rownames=T, show_colnames=T, digits=3, display_numbers=F, 
-         treeheight_row=90, treeheight_col=0, cluster_rows=F, cluster_cols=F, 
-         clustering_method="complete", number_format="%.3f")
 theta3 <- as.data.frame(theta2)
 rownames(theta3)[1:44] <- paste("Band1_", 1:44, sep = "")
 rownames(theta3)[45:95] <- paste("Band2_", 1:51, sep = "")
@@ -117,12 +119,44 @@ plot(sil4, cex.names=.6, main="k=9", col=c("#A52A2A", "#8B4513",
 clus <- cutree(theta_clust, k=2)
 mypal = c("#A52A2A", "#8B4513", "#00008B", "#008000", 
           "#778899", "#008080", "#FF6347")
-mypal2 = c("#A52A2A", "#008080","#00008B")
+mypal2 = c("#A52A2A", "#008080")
 par(mfrow=c(1,1))
 par(mar=c(0,0,0,0))
 plot(as.phylo(theta_clust), type="fan", tip.color=mypal2[clus], 
      edge.color="black", cex=.5, font=2.5)
 par(mar=c(5.1,4.1,4.1,2.1))
+
+# Checking fanned dendogram with heatmap distribution.
+theta4 <- as.data.frame(as.matrix(theta3))
+rownames(theta4)[1:44] <- paste("AA_", 1:44, sep = "")
+rownames(theta4)[45:95] <- paste("BB_", 1:51, sep = "")
+rownames(theta4)[96:112] <- paste("CC_", 1:17, sep = "")
+rownames(theta4)[113:122] <- paste("DD_", 1:10, sep = "")
+rownames(theta4)[123:144] <- paste("EE_", 1:22, sep = "")
+colnames(theta4)[1] <- paste("Label1")
+colnames(theta4)[2] <- paste("Label2")
+colnames(theta4)[3] <- paste("Label3")
+colnames(theta4)[4] <- paste("Label4")
+colnames(theta4)[5] <- paste("Label5")
+colnames(theta4)[6] <- paste("Label6")
+colnames(theta4)[7] <- paste("Label7")
+colnames(theta4)[8] <- paste("Label8")
+colnames(theta4)[9] <- paste("Label9")
+colnames(theta4)[10] <- paste("Label10")
+theta4 <- as.matrix(theta4)
+distance <- dist(theta4, method="euclidean")
+cluster <- hclust(distance, method="ward.D2")
+my_palette <- colorRampPalette(c("white", "black"))(n = 299)
+heatmap.2(theta4, dendrogram="none", Rowv=as.dendrogram(cluster), Colv=NA, key=F,
+          col=my_palette, cexCol=.5, cexRow=.5, trace="none", srtCol=45,
+          RowSideColors=mypal2[clus])
+# Silhouette Width figure and table for paper.
+par(mfrow=c(1,2))
+plot(sil, cex.names=.6, main="k=2", col=mypal2)
+x <- as.numeric(c(2,4,7,9))
+y <- as.numeric(c(.27,.19,.18,.16))
+plot(x, y, xlab="Number of Clusters", ylab="Average Silhouette Width", type="o")
+par(mfrow=c(1,1))
 
 # CA.
 rownames(theta2)[1:44] <- paste("AA_", 1:44, sep = "")
@@ -130,13 +164,30 @@ rownames(theta2)[45:95] <- paste("BB_", 1:51, sep = "")
 rownames(theta2)[96:112] <- paste("CC_", 1:17, sep = "")
 rownames(theta2)[113:122] <- paste("DD_", 1:10, sep = "")
 rownames(theta2)[123:144] <- paste("EE_", 1:22, sep = "")
-colnames(theta2) <- paste("Topic", 1:10, sep=" ")
-plot(ca(theta2), labels=c(1,1))
+colnames(theta2)[1] <- paste("label1")
+colnames(theta2)[2] <- paste("Label2")
+colnames(theta2)[3] <- paste("Label3")
+colnames(theta2)[4] <- paste("Label4")
+colnames(theta2)[5] <- paste("Label5")
+colnames(theta2)[6] <- paste("Label6")
+colnames(theta2)[7] <- paste("Label7")
+colnames(theta2)[8] <- paste("Label8")
+colnames(theta2)[9] <- paste("Label9")
+colnames(theta2)[10] <- paste("Label10")
+plot(ca(theta2), labels=c(1,1), what=c("none", "all"), col.lab=c("black"), 
+     xlim=c(-1.5, 1.5), ylim=c(-1.0, 1.0))
+plot(ca(theta2), labels=c(1,1), what=c("all", "all"), col.lab=c("darkgrey", "black"))
 thetaCA <- ca(theta2)
 print(thetaCA)
 summary(thetaCA)
 
-# N-grams.
+# Topic constrasts for paper.
+plot.STM(paper_model2, type="perspectives", covarlevels=c(1,2), topics=6, 
+         labeltype="prob")
+plot.STM(paper_model2, type="perspectives", covarlevels=c(1,5), topics=9, 
+         labeltype="prob")
+
+# N-grams (not using right now).
 options(mc.cores=1)
 TriGramTokenizer <- function(x) NGramTokenizer(x, Weka_control(min=3, max=3))
 exp <- as.data.frame(data2$Lyrics)
